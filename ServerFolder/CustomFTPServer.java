@@ -140,7 +140,7 @@ class ClientHandler implements Runnable {
         }
         
         else if (receivedCommand[0].equals("GPRT")) {
-            byte data[] = serverDataPort.getBytes();
+            byte data[] = serverDataPort.getBytes("US-ASCII");
             return sendData(data);
         }
         
@@ -160,7 +160,7 @@ class ClientHandler implements Runnable {
                 dataString = dataString.substring(0, dataString.lastIndexOf("\r\n"));
             }
 
-            return sendData(dataString.getBytes());
+            return sendData(dataString.getBytes("US-ASCII"));
         }
         
         else if (receivedCommand[0].equals("CWD")) {
