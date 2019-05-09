@@ -1,4 +1,4 @@
 import os
 
-os.system("python test_retrieve.py | python test_write.py | python test_modify.py")
-os.system("python test_revert.py")
+os.system("python3 test_retrieve.py | python3 test_write.py | python3 test_modify.py")
+os.system("python3 test_revert.py")
