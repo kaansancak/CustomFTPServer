@@ -1,13 +1,14 @@
-import java.io.BufferedReader;
-import java.io.DataOutputStream;
-import java.io.IOException;
-import java.io.InputStreamReader;
+import java.io.*;
 import java.net.ServerSocket;
 import java.net.Socket;
-import java.io.File;
+import java.nio.ByteBuffer;
+import java.nio.file.Files;
 
 public class CustomFTPServer {
 
+    private final static int MAX_DATA_PORT = 65535;
+    private final static int MIN_DATA_PORT = 1;
+    private static String serverDataPort;
     private static ServerSocket serverSocket;
 
     public static void main(String[] args){
@@ -22,7 +23,9 @@ public class CustomFTPServer {
         String addr = args[0];
         int controlPort = Integer.parseInt(args[1]);
 
+        serverDataPort = (int) (Math.random()*(MAX_DATA_PORT-1)) + MIN_DATA_PORT + "";
         System.out.println("Server is running...");
+        System.out.println("Server data port is chosen as: " + serverDataPort);
 
         //Create Server socket
         serverSocket = null;
@@ -40,12 +43,11 @@ public class CustomFTPServer {
             Socket clientConnection = null;
             try {
                 clientConnection = serverSocket.accept();
-                new Thread(new ClientHandler(clientConnection, addr)).start();;
+                new Thread(new ClientHandler(clientConnection, addr, serverDataPort)).start();;
             } catch (IOException e) {
                 e.printStackTrace();
             }
         }
-
     }
 
     protected void finalize() throws IOException {
@@ -61,18 +63,24 @@ class ClientHandler implements Runnable {
     private final static int MIN_DATA_PORT = 1;
     private final static String ROOT_DIRECTORY = "./";
 
-    private String currentDirectory = ROOT_DIRECTORY;
-    private Socket dataPort;
+    private String currentDirectory;
     private String addr;
-    private int dataPortNo = -1;
+    private int clientDataPort;
+    private String serverDataPort;
 
     private Socket clientConnection;
+    private Socket dataConnection;
+
     BufferedReader inFromClient;
     DataOutputStream outToClient;
     
-    ClientHandler(Socket clientConnection, String addr) {
+    ClientHandler(Socket clientConnection, String addr, String serverDataPort) {
         this.clientConnection = clientConnection;
         this.addr = addr;
+        this.serverDataPort = serverDataPort;
+
+        this.clientDataPort = -1;
+        this.currentDirectory = "./";
     } 
     
     public void run() {
@@ -102,45 +110,54 @@ class ClientHandler implements Runnable {
             String requestMessage = null;
             try {
                 requestMessage = inFromClient.readLine();
-            } catch (IOException e) {
+                //Print Request Msg
+                System.out.println(requestMessage);
+
+                String receivedCommand[] = requestMessage.split(" ");
+                isConnected = handleRequest(receivedCommand);
+            } catch (Exception e) {
                 e.printStackTrace();
             }
-
-            //Print Request Msg
-            System.out.println(requestMessage);
-
-            String receivedCommand[] = requestMessage.split(" ");
-            isConnected = handleRequest(receivedCommand);
         }
+
+        System.out.println("Client is closed...");
     }
 
     public boolean handleRequest(String[] receivedCommand) {
         
         if (receivedCommand[0].equals("PORT")) {
             boolean isSuccess = true;
-            if(dataPortNo < MIN_DATA_PORT || dataPortNo > MAX_DATA_PORT){
+            int port = Integer.parseInt(receivedCommand[1]);
+            if(port < MIN_DATA_PORT || port > MAX_DATA_PORT){
                 isSuccess = false;
             }else{
-                dataPortNo = Integer.parseInt(receivedCommand[1]);
+                clientDataPort = port;
             }
             return sendResponse(isSuccess);
         }
         
         else if (receivedCommand[0].equals("GPRT")) {
-            //Check if Port is opened
-            boolean isSuccess = false;
-            if(dataPortNo != -1){
-                // TODO
-            }else{
-                isSuccess = false;
-            }
-            return sendResponse(isSuccess);
+            byte data[] = serverDataPort.getBytes();
+            return sendData(data);
         }
         
         else if (receivedCommand[0].equals("NLST")) {
-            boolean isSuccess = false;
-            // TODO
-            return sendResponse(isSuccess);
+            File root = new File(currentDirectory);
+            File[] fileList = root.listFiles();
+            String dataString = "";
+            for (File file: fileList) {
+                if(file.isDirectory()){
+                    dataString += file.getName() + ":" + "d" + "\r\n";
+                }else{
+                    dataString += file.getName() + ":" + "f" + "\r\n";
+                }
+            }
+            System.out.println("Current directory content: " + dataString);
+            if (dataString.lastIndexOf("\r\n") != -1) {
+                dataString = dataString.substring(0, dataString.lastIndexOf("\r\n"));
+            }
+
+            return sendData(dataString.getBytes());
         }
         
         else if (receivedCommand[0].equals("CWD")) {
@@ -184,15 +201,25 @@ class ClientHandler implements Runnable {
             return sendResponse(isSuccess);
         }
         
-        else if (receivedCommand[0].equals("MKDIR")) {
+        else if (receivedCommand[0].equals("MKDR")) {
             boolean isSucccess = (new File(currentDirectory + receivedCommand[1])).mkdirs();
             return sendResponse(isSucccess);
         }
         
         else if (receivedCommand[0].equals("RETR")) {
-            // TODO
-            boolean isSuccess = false;
-            return sendResponse(isSuccess);
+            String fileName = receivedCommand[1];
+            File file = new File(currentDirectory + fileName);
+            if(file.exists() && !file.isDirectory()){
+                byte data[] = null;
+                try {
+                    Files.readAllBytes(file.toPath());
+                    return sendData(data);
+                } catch(Exception e){
+                    e.printStackTrace();
+                    return sendResponse(false);
+                }
+            }
+            return sendResponse(false);
         }
         
         else if (receivedCommand[0].equals("DELE")) {
@@ -227,8 +254,8 @@ class ClientHandler implements Runnable {
             try {
                 sendResponse(true);
                 clientConnection.close();
-                if (dataPort != null){
-                    dataPort.close();
+                if (dataConnection != null){
+                    dataConnection.close();
                 }
             } catch (IOException e) {
                 e.printStackTrace();
@@ -236,7 +263,7 @@ class ClientHandler implements Runnable {
 
             return false;
         }
-        return false;
+        return sendResponse(false);
     }
 
     boolean sendResponse(boolean isSuccess){
@@ -245,8 +272,8 @@ class ClientHandler implements Runnable {
         if(responseMessage.equals(FAILURE)){
             try {
                 clientConnection.close();
-                if (dataPort != null){
-                    dataPort.close();
+                if (dataConnection != null){
+                    dataConnection.close();
                 }
             } catch (IOException e) {
                 e.printStackTrace();
@@ -256,11 +283,44 @@ class ClientHandler implements Runnable {
 
         try {
             outToClient.writeBytes(responseMessage);
+            System.out.println("Sending response "  + responseMessage);
             return true;
         } catch (IOException e) {
             e.printStackTrace();
             return false;
         }
+    }
+
+    boolean sendData(byte[] data) {
+        if (clientDataPort == -1) {
+            return false;
+        }
+
+        boolean isSuccess = false;
+        try {
+            Socket dataConnection = new Socket(addr, clientDataPort);
+            OutputStream outputStream = dataConnection.getOutputStream();
+            DataOutputStream dataOut = new DataOutputStream(outputStream);
+
+            byte[] header = new byte[2];
+            ByteBuffer headerBuffer = ByteBuffer.allocate(2);
+            headerBuffer.putShort((short) data.length);
+            header = headerBuffer.array();
+
+            byte[] result = new byte[header.length + data.length];
+            for (int i = 0; i < result.length; i++) {
+                result[i] = i < header.length ? header[i] : data[i-2];
+            }
+        
+            dataOut.write(result);
+            dataConnection.close();
+            isSuccess = true;
+            
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
+        return sendResponse(isSuccess);
     }
 
     void deleteDirectoryRecursion(File file) throws IOException {

@@ -3,3 +3,5 @@
 /ServerFolder/folders
 /ServerFolder/random
 /out
+CustomFTPServer.class
+ClientHandler.class
