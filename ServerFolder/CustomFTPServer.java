@@ -140,7 +140,12 @@ class ClientHandler implements Runnable {
         }
         
         else if (receivedCommand[0].equals("GPRT")) {
-            byte data[] = serverDataPort.getBytes("US-ASCII");
+            byte data[] = new byte[0];
+            try {
+                data = serverDataPort.getBytes("US-ASCII");
+            } catch (UnsupportedEncodingException e) {
+                e.printStackTrace();
+            }
             return sendData(data);
         }
         
@@ -160,7 +165,11 @@ class ClientHandler implements Runnable {
                 dataString = dataString.substring(0, dataString.lastIndexOf("\r\n"));
             }
 
-            return sendData(dataString.getBytes("US-ASCII"));
+            try {
+                return sendData(dataString.getBytes("US-ASCII"));
+            } catch (UnsupportedEncodingException e) {
+                e.printStackTrace();
+            }
         }
         
         else if (receivedCommand[0].equals("CWD")) {
