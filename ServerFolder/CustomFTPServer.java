@@ -110,11 +110,13 @@ class ClientHandler implements Runnable {
             String requestMessage = null;
             try {
                 requestMessage = inFromClient.readLine();
-                //Print Request Msg
-                System.out.println(requestMessage);
+                if(requestMessage != null) {
+                    System.out.println(requestMessage);
 
-                String receivedCommand[] = requestMessage.split(" ");
-                isConnected = handleRequest(receivedCommand);
+                    String receivedCommand[] = requestMessage.split(" ");
+                    isConnected = handleRequest(receivedCommand);
+                }
+
             } catch (Exception e) {
                 e.printStackTrace();
             }
@@ -284,7 +286,7 @@ class ClientHandler implements Runnable {
                 if (dataConnection != null){
                     dataConnection.close();
                 }
-                return true;
+                return false;
             }
 
             return true;
