@@ -9,7 +9,6 @@ import java.io.File;
 public class CustomFTPServer {
 
     private static ServerSocket serverSocket;
-    private static ClientHandler clientHandler;
 
     public static void main(String[] args){
 
@@ -63,11 +62,13 @@ class ClientHandler implements Runnable {
     private final static String ROOT_DIRECTORY = "./";
 
     private String currentDirectory = ROOT_DIRECTORY;
-    private Socket clientConnection;
     private Socket dataPort;
     private String addr;
-    private String responseMessage = "";
     private int dataPortNo = -1;
+
+    private Socket clientConnection;
+    BufferedReader inFromClient;
+    DataOutputStream outToClient;
     
     ClientHandler(Socket clientConnection, String addr) {
         this.clientConnection = clientConnection;
@@ -82,21 +83,22 @@ class ClientHandler implements Runnable {
         System.out.println("New thread started for client...");
         
         //Handle Client Request
-        BufferedReader inFromClient = null;
+        inFromClient = null;
         try {
             inFromClient = new BufferedReader(new InputStreamReader((clientConnection.getInputStream())));
         } catch (IOException e) {
             e.printStackTrace();
         }
 
-        DataOutputStream outToClient = null;
+        outToClient = null;
         try {
             outToClient = new DataOutputStream(clientConnection.getOutputStream());
         } catch (IOException e) {
             e.printStackTrace();
         }
 
-        while(true){
+        boolean isConnected = true;
+        while(isConnected){
             String requestMessage = null;
             try {
                 requestMessage = inFromClient.readLine();
@@ -108,44 +110,37 @@ class ClientHandler implements Runnable {
             System.out.println(requestMessage);
 
             String receivedCommand[] = requestMessage.split(" ");
-            handleRequest(receivedCommand, outToClient);
+            isConnected = handleRequest(receivedCommand);
         }
     }
 
-    public void handleRequest(String[] receivedCommand, DataOutputStream outToClient) {
+    public boolean handleRequest(String[] receivedCommand) {
         
         if (receivedCommand[0].equals("PORT")) {
+            boolean isSuccess = true;
             if(dataPortNo < MIN_DATA_PORT || dataPortNo > MAX_DATA_PORT){
-                responseMessage = FAILURE;
+                isSuccess = false;
             }else{
                 dataPortNo = Integer.parseInt(receivedCommand[1]);
-                responseMessage = SUCCESS;
             }
-            try {
-                outToClient.writeBytes(responseMessage);
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
+            return sendResponse(isSuccess);
         }
         
         else if (receivedCommand[0].equals("GPRT")) {
-            responseMessage = SUCCESS;
-            try {
+            //Check if Port is opened
+            boolean isSuccess = false;
+            if(dataPortNo != -1){
                 // TODO
-                outToClient.writeBytes(responseMessage);
-            } catch (IOException e) {
-                e.printStackTrace();
+            }else{
+                isSuccess = false;
             }
+            return sendResponse(isSuccess);
         }
         
         else if (receivedCommand[0].equals("NLST")) {
-            responseMessage = SUCCESS;
-            try {
-                // TODO
-                outToClient.writeBytes(responseMessage);
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
+            boolean isSuccess = false;
+            // TODO
+            return sendResponse(isSuccess);
         }
         
         else if (receivedCommand[0].equals("CWD")) {
@@ -153,127 +148,100 @@ class ClientHandler implements Runnable {
             //Get Children
             File root = new File(currentDirectory);
             File[] fileList = root.listFiles();
-            boolean isChildFound = false;
+            boolean isSuccess = false;
                                
             for (File file: fileList) {
                 if(file.getName().equals(childName) && file.isDirectory()){
-                    isChildFound = true;
+                    isSuccess = true;
                     break;
                 }
             }
+            
             //Change directory if directory is found
-            if(isChildFound){
+            if(isSuccess){
                 currentDirectory += childName + "/";
-                responseMessage = SUCCESS;
-            }else{
-                responseMessage = FAILURE;
             }
 
-            try {
-                outToClient.writeBytes(responseMessage);
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
+            return sendResponse(isSuccess);
         }
         
         else if (receivedCommand[0].equals("CDUP")) {
-            boolean isCDUP = false;
+            boolean isSuccess = false;
             if (currentDirectory.equals(ROOT_DIRECTORY)) {
-                responseMessage = FAILURE;
+                isSuccess = true;
             }else {
                 currentDirectory = currentDirectory.substring(0, currentDirectory.length()-1);
                 int index = currentDirectory.lastIndexOf("/");
                 currentDirectory = currentDirectory.substring(0, index+1);
-                isCDUP = true;
+                isSuccess = true;
             }
-
-            responseMessage = isCDUP ? SUCCESS : FAILURE;
-            try {
-                outToClient.writeBytes(responseMessage);
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
+            return sendResponse(isSuccess);
         }
         
         else if (receivedCommand[0].equals("PUT")) {
-            responseMessage = SUCCESS;
-            try {
-                // TODO
-                outToClient.writeBytes(responseMessage);
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
+            // TODO
+            boolean isSuccess = false;
+            return sendResponse(isSuccess);
         }
         
         else if (receivedCommand[0].equals("MKDIR")) {
-            boolean success = (new File(currentDirectory + receivedCommand[1])).mkdirs();
-            responseMessage = success ? SUCCESS : FAILURE;
-            try {
-                outToClient.writeBytes(responseMessage);
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
+            boolean isSucccess = (new File(currentDirectory + receivedCommand[1])).mkdirs();
+            return sendResponse(isSucccess);
         }
         
         else if (receivedCommand[0].equals("RETR")) {
-            responseMessage = SUCCESS;
-            try {
-                outToClient.writeBytes(responseMessage);
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
+            // TODO
+            boolean isSuccess = false;
+            return sendResponse(isSuccess);
         }
         
         else if (receivedCommand[0].equals("DELE")) {
             String fileName = receivedCommand[1];
             File file = new File(currentDirectory + fileName);
-            boolean isDeleted = false;
+            boolean isSuccess = false;
             if(file.exists() && !file.isDirectory()){
-                isDeleted = file.delete();
+                isSuccess = file.delete();
             }
-
-            responseMessage = isDeleted ? SUCCESS : FAILURE;
-            try {
-                outToClient.writeBytes(responseMessage);
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
+            return sendResponse(isSuccess);
         }
         
         else if (receivedCommand[0].equals("DDIR")) {
             String directoryName = receivedCommand[1];
             File directory = new File(currentDirectory + "/" + directoryName);
-            boolean isDeleted = true;
+            boolean isSuccess = true;
             if (directory.exists() && directory.isDirectory()) {
                 try{
                     deleteDirectoryRecursion(directory);
                 }catch(IOException e){
-                    isDeleted = false;
+                    isSuccess = false;
                     e.printStackTrace();
                 }                    
             }
             else {
-                isDeleted = false;
+                isSuccess = false;
             }
-
-            responseMessage = isDeleted ? SUCCESS : FAILURE;
-            try {
-                outToClient.writeBytes(responseMessage);
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
+            return sendResponse(isSuccess);
         }
         
         else if (receivedCommand[0].equals("QUIT")) {
-            responseMessage = SUCCESS;
             try {
-                outToClient.writeBytes(responseMessage);
+                sendResponse(true);
                 clientConnection.close();
+                if (dataPort != null){
+                    dataPort.close();
+                }
             } catch (IOException e) {
                 e.printStackTrace();
             }
-        }
 
+            return false;
+        }
+        return false;
+    }
+
+    boolean sendResponse(boolean isSuccess){
+        String responseMessage = isSuccess ? SUCCESS : FAILURE;
+        
         if(responseMessage.equals(FAILURE)){
             try {
                 clientConnection.close();
@@ -283,6 +251,15 @@ class ClientHandler implements Runnable {
             } catch (IOException e) {
                 e.printStackTrace();
             }
+            return false;
+        }
+
+        try {
+            outToClient.writeBytes(responseMessage);
+            return true;
+        } catch (IOException e) {
+            e.printStackTrace();
+            return false;
         }
     }
 
