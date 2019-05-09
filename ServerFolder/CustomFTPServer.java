@@ -162,7 +162,6 @@ class ClientHandler implements Runnable {
         
         else if (receivedCommand[0].equals("CWD")) {
             String childName = receivedCommand[1];
-            //Get Children
             File root = new File(currentDirectory);
             File[] fileList = root.listFiles();
             boolean isSuccess = false;
@@ -174,11 +173,9 @@ class ClientHandler implements Runnable {
                 }
             }
             
-            //Change directory if directory is found
             if(isSuccess){
                 currentDirectory += childName + "/";
             }
-
             return sendResponse(isSuccess);
         }
         
@@ -196,8 +193,17 @@ class ClientHandler implements Runnable {
         }
         
         else if (receivedCommand[0].equals("PUT")) {
-            // TODO
-            boolean isSuccess = false;
+            boolean isSuccess = true;
+            String fileName = receivedCommand[1];      
+        
+            try{
+                byte data[] = retrieveData();
+                writeBytesToFile(data, currentDirectory + fileName);
+            }catch(Exception e){
+                e.printStackTrace();
+                isSuccess = false;
+            };
+
             return sendResponse(isSuccess);
         }
         
@@ -212,7 +218,7 @@ class ClientHandler implements Runnable {
             if(file.exists() && !file.isDirectory()){
                 byte data[] = null;
                 try {
-                    Files.readAllBytes(file.toPath());
+                    data = Files.readAllBytes(file.toPath());
                     return sendData(data);
                 } catch(Exception e){
                     e.printStackTrace();
@@ -268,27 +274,43 @@ class ClientHandler implements Runnable {
 
     boolean sendResponse(boolean isSuccess){
         String responseMessage = isSuccess ? SUCCESS : FAILURE;
-        
-        if(responseMessage.equals(FAILURE)){
-            try {
-                clientConnection.close();
-                if (dataConnection != null){
-                    dataConnection.close();
-                }
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-            return false;
-        }
 
         try {
             outToClient.writeBytes(responseMessage);
             System.out.println("Sending response "  + responseMessage);
+
+            if(!isSuccess) {
+                clientConnection.close();
+                if (dataConnection != null){
+                    dataConnection.close();
+                }
+                return true;
+            }
+
             return true;
-        } catch (IOException e) {
+            
+        } catch (Exception e) {
             e.printStackTrace();
             return false;
         }
+    }
+
+    byte[] retrieveData() throws IOException {
+        int port = Integer.parseInt(serverDataPort);
+        ServerSocket dataSocket = new ServerSocket(port);
+        Socket dataConnection = dataSocket.accept();
+        InputStream inFromData = dataConnection.getInputStream();
+
+        byte[] header = new byte[2];
+        inFromData.read(header, 0, 2);
+
+        short size = ByteBuffer.wrap(header).getShort();
+        byte[] content = new byte[size];
+        inFromData.read(content);
+        dataSocket.close();
+        dataConnection.close();
+
+        return content;
     }
 
     boolean sendData(byte[] data) {
@@ -313,8 +335,9 @@ class ClientHandler implements Runnable {
             }
         
             dataOut.write(result);
-            dataConnection.close();
             isSuccess = true;
+            dataOut.close();
+            dataConnection.close();
             
         } catch (Exception e) {
             e.printStackTrace();
@@ -336,4 +359,25 @@ class ClientHandler implements Runnable {
             throw new IOException("Failed to delete " + file);
         }
     }
+
+    void writeBytesToFile(byte[] bytes, String filepath) 
+    { 
+        try { 
+            File file = new File(filepath);
+            // Initialize a pointer 
+            // in file using OutputStream 
+            OutputStream os = new FileOutputStream(file); 
+  
+            // Starts writing the bytes in it 
+            os.write(bytes); 
+            System.out.println("Successfully written to file"); 
+  
+            // Close the file 
+            os.close(); 
+        } 
+  
+        catch (Exception e) { 
+            System.out.println("Exception: " + e); 
+        } 
+    } 
 }
