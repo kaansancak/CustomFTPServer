@@ -123,6 +123,7 @@ class ClientHandler implements Runnable {
         }
 
         System.out.println("Client is closed...");
+        return;
     }
 
     public boolean handleRequest(String[] receivedCommand) {
@@ -195,7 +196,7 @@ class ClientHandler implements Runnable {
         }
         
         else if (receivedCommand[0].equals("PUT")) {
-            boolean isSuccess = true;
+            sendResponse(true);
             String fileName = receivedCommand[1];      
         
             try{
@@ -203,10 +204,9 @@ class ClientHandler implements Runnable {
                 writeBytesToFile(data, currentDirectory + fileName);
             }catch(Exception e){
                 e.printStackTrace();
-                isSuccess = false;
             };
 
-            return sendResponse(isSuccess);
+            return true;
         }
         
         else if (receivedCommand[0].equals("MKDR")) {
