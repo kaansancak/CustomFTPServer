@@ -121,6 +121,21 @@ class ClientHandler implements Runnable {
                 e.printStackTrace();
             }
         }
+        if (clientConnection != null){
+            try {
+                clientConnection.close();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+
+        if (dataConnection != null){
+            try {
+                dataConnection.close();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
 
         System.out.println("Client is closed...");
         return;
@@ -268,16 +283,7 @@ class ClientHandler implements Runnable {
         }
         
         else if (receivedCommand[0].equals("QUIT")) {
-            try {
-                sendResponse(true);
-                clientConnection.close();
-                if (dataConnection != null){
-                    dataConnection.close();
-                }
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-
+            sendResponse(true);
             return false;
         }
         return sendResponse(false);
@@ -291,10 +297,6 @@ class ClientHandler implements Runnable {
             System.out.println("Sending response "  + responseMessage);
 
             if(!isSuccess) {
-                clientConnection.close();
-                if (dataConnection != null){
-                    dataConnection.close();
-                }
                 return false;
             }
 
