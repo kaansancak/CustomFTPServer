@@ -11,10 +11,10 @@ public class CustomFTPServer {
     private static String serverDataPort;
     private static ServerSocket serverSocket;
 
-    public static void main(String[] args){
+    public static void main(String[] args) {
 
         // Check the arguments and read the host & port
-        if(args.length != 2){
+        if (args.length != 2) {
             System.out.println("Exactly two parameters are needed: <Addr> <ControlPort> ");
             return;
         }
@@ -23,7 +23,7 @@ public class CustomFTPServer {
         String addr = args[0];
         int controlPort = Integer.parseInt(args[1]);
 
-        serverDataPort = (int) (Math.random()*(MAX_DATA_PORT-1)) + MIN_DATA_PORT + "";
+        serverDataPort = (int) (Math.random() * (MAX_DATA_PORT - 1)) + MIN_DATA_PORT + "";
         System.out.println("Server is running...");
         System.out.println("Server data port is chosen as: " + serverDataPort);
 
@@ -38,12 +38,13 @@ public class CustomFTPServer {
             System.out.println("Closing the CustomFTPServer");
             return;
         }
-        
-        while(true){
+
+        while (true) {
             Socket clientConnection = null;
             try {
                 clientConnection = serverSocket.accept();
-                new Thread(new ClientHandler(clientConnection, addr, serverDataPort)).start();;
+                new Thread(new ClientHandler(clientConnection, addr, serverDataPort)).start();
+                ;
             } catch (IOException e) {
                 e.printStackTrace();
             }
@@ -56,7 +57,7 @@ public class CustomFTPServer {
 }
 
 class ClientHandler implements Runnable {
-        
+
     private final static String SUCCESS = "200\r\n";
     private final static String FAILURE = "400\r\n";
     private final static int MAX_DATA_PORT = 65535;
@@ -73,7 +74,7 @@ class ClientHandler implements Runnable {
 
     BufferedReader inFromClient;
     DataOutputStream outToClient;
-    
+
     ClientHandler(Socket clientConnection, String addr, String serverDataPort) {
         this.clientConnection = clientConnection;
         this.addr = addr;
@@ -81,15 +82,15 @@ class ClientHandler implements Runnable {
 
         this.clientDataPort = -1;
         this.currentDirectory = "./";
-    } 
-    
+    }
+
     public void run() {
         // create input buffer and output buffer
         // wait for input from client and send response back to client
         // close all streams and sockets
 
         System.out.println("New thread started for client...");
-        
+
         //Handle Client Request
         inFromClient = null;
         try {
@@ -106,11 +107,11 @@ class ClientHandler implements Runnable {
         }
 
         boolean isConnected = true;
-        while(isConnected){
+        while (isConnected) {
             String requestMessage = null;
             try {
                 requestMessage = inFromClient.readLine();
-                if(requestMessage != null) {
+                if (requestMessage != null) {
                     System.out.println(requestMessage);
 
                     String receivedCommand[] = requestMessage.split(" ");
@@ -121,7 +122,7 @@ class ClientHandler implements Runnable {
                 e.printStackTrace();
             }
         }
-        if (clientConnection != null){
+        if (clientConnection != null) {
             try {
                 clientConnection.close();
             } catch (IOException e) {
@@ -129,7 +130,7 @@ class ClientHandler implements Runnable {
             }
         }
 
-        if (dataConnection != null){
+        if (dataConnection != null) {
             try {
                 dataConnection.close();
             } catch (IOException e) {
@@ -142,19 +143,17 @@ class ClientHandler implements Runnable {
     }
 
     public boolean handleRequest(String[] receivedCommand) {
-        
+
         if (receivedCommand[0].equals("PORT")) {
             boolean isSuccess = true;
             int port = Integer.parseInt(receivedCommand[1]);
-            if(port < MIN_DATA_PORT || port > MAX_DATA_PORT){
+            if (port < MIN_DATA_PORT || port > MAX_DATA_PORT) {
                 isSuccess = false;
-            }else{
+            } else {
                 clientDataPort = port;
             }
             return sendResponse(isSuccess);
-        }
-        
-        else if (receivedCommand[0].equals("GPRT")) {
+        } else if (receivedCommand[0].equals("GPRT")) {
             byte data[] = new byte[0];
             try {
                 data = serverDataPort.getBytes("US-ASCII");
@@ -162,16 +161,14 @@ class ClientHandler implements Runnable {
                 e.printStackTrace();
             }
             return sendData(data);
-        }
-        
-        else if (receivedCommand[0].equals("NLST")) {
+        } else if (receivedCommand[0].equals("NLST")) {
             File root = new File(currentDirectory);
             File[] fileList = root.listFiles();
             String dataString = "";
-            for (File file: fileList) {
-                if(file.isDirectory()){
+            for (File file : fileList) {
+                if (file.isDirectory()) {
                     dataString += file.getName() + ":" + "d" + "\r\n";
-                }else{
+                } else {
                     dataString += file.getName() + ":" + "f" + "\r\n";
                 }
             }
@@ -185,123 +182,107 @@ class ClientHandler implements Runnable {
             } catch (UnsupportedEncodingException e) {
                 e.printStackTrace();
             }
-        }
-        
-        else if (receivedCommand[0].equals("CWD")) {
+        } else if (receivedCommand[0].equals("CWD")) {
             String childName = receivedCommand[1];
             File root = new File(currentDirectory);
             File[] fileList = root.listFiles();
             boolean isSuccess = false;
-                               
-            for (File file: fileList) {
-                if(file.getName().equals(childName) && file.isDirectory()){
+
+            for (File file : fileList) {
+                if (file.getName().equals(childName) && file.isDirectory()) {
                     isSuccess = true;
                     break;
                 }
             }
-            
-            if(isSuccess){
+
+            if (isSuccess) {
                 currentDirectory += childName + "/";
             }
             return sendResponse(isSuccess);
-        }
-        
-        else if (receivedCommand[0].equals("CDUP")) {
+        } else if (receivedCommand[0].equals("CDUP")) {
             boolean isSuccess = false;
             if (currentDirectory.equals(ROOT_DIRECTORY)) {
                 isSuccess = true;
-            }else {
-                currentDirectory = currentDirectory.substring(0, currentDirectory.length()-1);
+            } else {
+                currentDirectory = currentDirectory.substring(0, currentDirectory.length() - 1);
                 int index = currentDirectory.lastIndexOf("/");
-                currentDirectory = currentDirectory.substring(0, index+1);
+                currentDirectory = currentDirectory.substring(0, index + 1);
                 isSuccess = true;
             }
             return sendResponse(isSuccess);
-        }
-        
-        else if (receivedCommand[0].equals("PUT")) {
+        } else if (receivedCommand[0].equals("PUT")) {
             sendResponse(true);
-            String fileName = receivedCommand[1];      
-        
-            try{
+            String fileName = receivedCommand[1];
+
+            try {
                 byte data[] = retrieveData();
                 writeBytesToFile(data, currentDirectory + fileName);
-            }catch(Exception e){
+            } catch (Exception e) {
                 e.printStackTrace();
-            };
+            }
+            ;
 
             return true;
-        }
-        
-        else if (receivedCommand[0].equals("MKDR")) {
+        } else if (receivedCommand[0].equals("MKDR")) {
             boolean isSucccess = (new File(currentDirectory + receivedCommand[1])).mkdirs();
             return sendResponse(isSucccess);
-        }
-        
-        else if (receivedCommand[0].equals("RETR")) {
+        } else if (receivedCommand[0].equals("RETR")) {
             String fileName = receivedCommand[1];
             File file = new File(currentDirectory + fileName);
-            if(file.exists() && !file.isDirectory()){
+            if (file.exists() && !file.isDirectory()) {
                 byte data[] = null;
                 try {
                     data = Files.readAllBytes(file.toPath());
                     return sendData(data);
-                } catch(Exception e){
+                } catch (Exception e) {
                     e.printStackTrace();
                     return sendResponse(false);
                 }
             }
             return sendResponse(false);
-        }
-        
-        else if (receivedCommand[0].equals("DELE")) {
+        } else if (receivedCommand[0].equals("DELE")) {
             String fileName = receivedCommand[1];
             File file = new File(currentDirectory + fileName);
             boolean isSuccess = false;
-            if(file.exists() && !file.isDirectory()){
+            if (file.exists() && !file.isDirectory()) {
                 isSuccess = file.delete();
             }
             return sendResponse(isSuccess);
-        }
-        
-        else if (receivedCommand[0].equals("DDIR")) {
+        } else if (receivedCommand[0].equals("DDIR")) {
             String directoryName = receivedCommand[1];
             File directory = new File(currentDirectory + "/" + directoryName);
             boolean isSuccess = true;
             if (directory.exists() && directory.isDirectory()) {
-                try{
+                try {
                     deleteDirectoryRecursion(directory);
-                }catch(IOException e){
+                } catch (IOException e) {
                     isSuccess = false;
                     e.printStackTrace();
-                }                    
-            }
-            else {
+                }
+            } else {
                 isSuccess = false;
             }
             return sendResponse(isSuccess);
-        }
-        
-        else if (receivedCommand[0].equals("QUIT")) {
+        } else if (receivedCommand[0].equals("QUIT")) {
             sendResponse(true);
             return false;
         }
         return sendResponse(false);
     }
 
-    boolean sendResponse(boolean isSuccess){
+    boolean sendResponse(boolean isSuccess) {
         String responseMessage = isSuccess ? SUCCESS : FAILURE;
 
         try {
             outToClient.writeBytes(responseMessage);
-            System.out.println("Sending response "  + responseMessage);
+            System.out.println("Sending response " + responseMessage);
 
-            if(!isSuccess) {
+            if (!isSuccess) {
                 return false;
             }
 
             return true;
-            
+
         } catch (Exception e) {
             e.printStackTrace();
             return false;
@@ -344,14 +325,14 @@ class ClientHandler implements Runnable {
 
             byte[] result = new byte[header.length + data.length];
             for (int i = 0; i < result.length; i++) {
-                result[i] = i < header.length ? header[i] : data[i-2];
+                result[i] = i < header.length ? header[i] : data[i - 2];
             }
-        
+
             dataOut.write(result);
             isSuccess = true;
             dataOut.close();
             dataConnection.close();
-            
+
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -373,24 +354,21 @@ class ClientHandler implements Runnable {
         }
     }
 
-    void writeBytesToFile(byte[] bytes, String filepath) 
-    { 
-        try { 
+    void writeBytesToFile(byte[] bytes, String filepath) {
+        try {
             File file = new File(filepath);
             // Initialize a pointer 
             // in file using OutputStream 
-            OutputStream os = new FileOutputStream(file); 
-  
+            OutputStream os = new FileOutputStream(file);
+
             // Starts writing the bytes in it 
-            os.write(bytes); 
-            System.out.println("Successfully written to file"); 
-  
+            os.write(bytes);
+            System.out.println("Successfully written to file");
+
             // Close the file 
-            os.close(); 
-        } 
-  
-        catch (Exception e) { 
-            System.out.println("Exception: " + e); 
-        } 
-    } 
+            os.close();
+        } catch (Exception e) {
+            System.out.println("Exception: " + e);
+        }
+    }
 }
